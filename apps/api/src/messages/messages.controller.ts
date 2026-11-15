@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import {
   SendMessageDtoSchema,
   type ConversationSummary,
@@ -12,7 +13,7 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { MessagesService } from './messages.service.js';
 
 @Controller('messages')
-@UseGuards(AuthGuard)
+@UseGuards(ThrottlerGuard, AuthGuard)
 export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 

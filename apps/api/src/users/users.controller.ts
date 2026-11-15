@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { AvatarConfigSchema, type AvatarConfig, type UserProfile } from '@vybe/shared-types';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { AuthGuard } from '../auth/auth.guard.js';
@@ -8,7 +9,7 @@ import type { FollowResult } from './users.service.js';
 import { UsersService } from './users.service.js';
 
 @Controller('users')
-@UseGuards(AuthGuard)
+@UseGuards(ThrottlerGuard, AuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

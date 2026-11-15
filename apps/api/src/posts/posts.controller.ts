@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import {
   CreateCommentDtoSchema,
   CreatePostDtoSchema,
@@ -17,7 +18,7 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { PostsService, type LikeResult } from './posts.service.js';
 
 @Controller('posts')
-@UseGuards(AuthGuard)
+@UseGuards(ThrottlerGuard, AuthGuard)
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 

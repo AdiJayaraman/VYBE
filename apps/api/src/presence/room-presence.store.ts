@@ -16,6 +16,8 @@ export class RoomPresenceStore {
   private readonly rooms = new Map<string, Map<string, RoomParticipant>>();
   private readonly socketBindings = new Map<string, SocketRoomBinding>();
   private readonly lastMoveAt = new Map<string, number>();
+  /** Token buckets for chat / emote / prop spam protection. */
+  private readonly rateBuckets = new Map<string, { tokens: number; updatedAt: number }>();
 
   getParticipants(roomId: string): RoomParticipant[] {
     const room = this.rooms.get(roomId);
@@ -139,7 +141,33 @@ export class RoomPresenceStore {
     const binding = this.socketBindings.get(socketId);
     this.socketBindings.delete(socketId);
     this.lastMoveAt.delete(socketId);
+    for (const key of this.rateBuckets.keys()) {
+      if (key.endsWith(`:${socketId}`)) this.rateBuckets.delete(key);
+    }
     return binding;
+  }
+
+  /**
+   * Token-bucket check for low-frequency events. `capacity` bursts are allowed,
+   * refilling at `refillPerSecond`.
+   */
+  consumeRateLimit(
+    key: string,
+    capacity: number,
+    refillPerSecond: number,
+    now = Date.now(),
+  ): boolean {
+    const bucket = this.rateBuckets.get(key) ?? { tokens: capacity, updatedAt: now };
+    const elapsedSeconds = Math.max(0, (now - bucket.updatedAt) / 1000);
+    const tokens = Math.min(capacity, bucket.tokens + elapsedSeconds * refillPerSecond);
+
+    if (tokens < 1) {
+      this.rateBuckets.set(key, { tokens, updatedAt: now });
+      return false;
+    }
+
+    this.rateBuckets.set(key, { tokens: tokens - 1, updatedAt: now });
+    return true;
   }
 
   /** Server-side flood protection for `room:move` (max ~30Hz per socket). */

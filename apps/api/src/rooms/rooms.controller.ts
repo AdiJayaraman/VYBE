@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import {
   CreateRoomDtoSchema,
   UpdateRoomSceneDtoSchema,
@@ -14,7 +15,7 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { RoomsService } from './rooms.service.js';
 
 @Controller('rooms')
-@UseGuards(AuthGuard)
+@UseGuards(ThrottlerGuard, AuthGuard)
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
@@ -39,9 +40,10 @@ export class RoomsController {
 
   @Patch(':slug/scene')
   async updateScene(
+    @CurrentUser() user: AuthenticatedUser,
     @Param('slug') slug: string,
     @Body(new ZodValidationPipe(UpdateRoomSceneDtoSchema)) dto: UpdateRoomSceneDto,
   ): Promise<RoomDetail> {
-    return this.roomsService.updateScene(slug, dto.sceneGraph);
+    return this.roomsService.updateScene(slug, dto.sceneGraph, user.id);
   }
 }

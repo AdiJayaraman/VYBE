@@ -36,14 +36,18 @@ Built as a **pnpm + Turborepo** monorepo with shared, strictly-typed contracts.
 pnpm install
 ```
 
-## 2. Start PostgreSQL
+## 2. Start PostgreSQL (and optional Redis)
 
 ```bash
-docker run --name vybe-postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=vybe \
-  -p 5432:5432 \
-  -d postgres:16
+docker compose up -d
+```
+
+That starts PostgreSQL 16 on `5432` (and Redis 7 on `6379`, reserved for multi-instance
+realtime scaling). Prefer a single container?
+
+```bash
+docker run --name vybe-postgres -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=vybe -p 5432:5432 -d postgres:16
 ```
 
 Connection strings already live in `packages/database/.env`:
@@ -61,11 +65,14 @@ pnpm db:generate
 
 ## 4. Create the schema
 
+A baseline migration already exists at `packages/database/prisma/migrations`:
+
 ```bash
-pnpm db:push        # fast, no migration history
-# or
-pnpm db:migrate     # versioned migrations (prisma migrate dev)
+pnpm --filter @vybe/database exec prisma migrate deploy   # apply migrations (dev and prod)
 ```
+
+For schema changes during development use `pnpm db:migrate` (creates a new migration) or
+`pnpm db:push` for a throwaway database.
 
 ## 5. Seed demo data
 
@@ -122,6 +129,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:4000 pnpm --filter @vybe/mobile start
 | `SUPABASE_URL`        | Optional: Supabase project URL                                  |
 | `GEMINI_API_KEY`      | Optional: enables Gemini layout generation (fallback otherwise) |
 | `VYBE_PG_POOL_MAX`    | Optional: max PostgreSQL pool connections (default 10)          |
+| `CORS_ORIGINS`        | Comma-separated allowlist for REST + Socket.IO. Required in production; dev reflects request origin |
 
 Web (build-time): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SOCKET_URL`.
 
@@ -131,6 +139,8 @@ Web (build-time): `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SOCKET_URL`.
 | -------------------------------- | ---------------------------------------------------- |
 | `pnpm build`                     | Build all packages and apps (Turbo)                  |
 | `pnpm typecheck`                 | Strict TypeScript across all 7 workspaces            |
+| `pnpm test`                      | Unit tests (3d-core math/layouts, schemas, passwords) |
+| `docker compose up -d`           | Local PostgreSQL 16 + Redis 7                        |
 | `pnpm dev`                       | Run everything in watch mode                         |
 | `pnpm db:generate`               | `prisma generate` (Prisma 7 rust-free client)        |
 | `pnpm db:push` / `pnpm db:migrate` | Sync schema / create a migration                   |
@@ -187,6 +197,38 @@ All event names and payloads come from `@vybe/shared-types` (`ServerToClientEven
 - **Strict dark-first theme.** `#070B19` background, `#0F1629` surface, `#7C3AED` primary,
   `#06B6D4` live accent, HUD glass `rgba(15, 22, 41, 0.75)` + `backdrop-blur`.
 
+## Security & abuse limits
+
+Every route is validated by the same Zod schemas the clients use, and the defaults are defensive:
+
+- **Transport**: `helmet` security headers, `trust proxy`, 1 MB JSON/urlencoded body limit.
+- **HTTP throttling** (per IP, in-memory): global 120 req/min on authenticated controllers,
+  login 10/min, register 5/min, AI layout generation 12/min.
+- **Socket.IO**: `room:move` is capped at ~30 Hz per socket; chat 6-message burst refilling 1.5/s;
+  emotes 6 burst at 1/s; prop spawns 12 burst at 0.5/s; joins 8 burst at 0.5/s. Excess returns
+  `RATE_LIMITED` rather than being silently dropped.
+- **Authorisation**: `PATCH /rooms/:slug/scene` is owner-only; prop spawning requires room
+  membership; `room:prop_added` rejects payloads that would exceed the 120-prop room cap instead
+  of silently deleting furniture.
+- **CORS**: `CORS_ORIGINS` allowlist in production (`origin: false` when unset), reflected origin in
+  development only.
+- **Secrets**: everything in `.env` is gitignored; `.env.example` documents the keys.
+
+## Tests & CI
+
+```bash
+pnpm test     # vitest: 32 unit tests across @vybe/3d-core, @vybe/shared-types, @vybe/database
+```
+
+`.github/workflows/ci.yml` runs install → `pnpm db:generate` → typecheck → test → build on every push
+to `main` and every pull request.
+
+## Scaling note
+
+Presence and room transforms live in one process (`RoomPresenceStore`), so run **one** API instance
+unless you add the Socket.IO Redis adapter (`@socket.io/redis-adapter`) plus a shared presence store.
+`docker-compose.yml` already provisions Redis for that step, and it is not wired in yet.
+
 ## Troubleshooting
 
 - **“API connection required” banners** — the API or database is not reachable. Check
@@ -196,3 +238,6 @@ All event names and payloads come from `@vybe/shared-types` (`ServerToClientEven
   `packages/database/src/generated/prisma`).
 - **AI Room Builder always says “fallback”** — set `GEMINI_API_KEY` in `apps/api/.env`; the
   deterministic layout generator is used until then.
+- **HTTP 429** — you hit one of the throttles above (login is 10/min). Wait a minute; the counters
+  are in-memory per API instance.
+- **HTTP 403 on room scene save** — only the room owner (the creator) may persist `sceneGraph`.

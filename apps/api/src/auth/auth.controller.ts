@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
   LoginDtoSchema,
   RegisterDtoSchema,
@@ -19,6 +20,8 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(201)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async register(
     @Body(new ZodValidationPipe(RegisterDtoSchema)) dto: RegisterDto,
   ): Promise<AuthSession> {
@@ -27,6 +30,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async login(@Body(new ZodValidationPipe(LoginDtoSchema)) dto: LoginDto): Promise<AuthSession> {
     return this.authService.login(dto);
   }

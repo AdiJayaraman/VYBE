@@ -10,6 +10,7 @@
   "scripts": {
     "build": "turbo run build --cache-dir=./.turbo/cache",
     "typecheck": "turbo run typecheck --cache-dir=./.turbo/cache",
+    "test": "turbo run test --cache-dir=./.turbo/cache",
     "dev": "turbo run dev --cache-dir=./.turbo/cache",
     "clean": "turbo run clean --cache-dir=./.turbo/cache",
     "db:generate": "pnpm --filter @vybe/database generate",

@@ -34,6 +34,7 @@ import {
 } from '@vybe/shared-types';
 import { z } from 'zod';
 import { AuthService } from '../auth/auth.service.js';
+import { resolveCorsOrigin } from '../common/cors.js';
 import { parseSceneGraph } from '../common/scene.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RoomPresenceStore } from '../presence/room-presence.store.js';
@@ -61,7 +62,7 @@ const ANIMATION_BY_EMOTE: Record<EmoteType, AnimationState> = {
 const HANDSHAKE_SCHEMA = z.object({ token: z.string().min(1) });
 
 @WebSocketGateway({
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: { origin: resolveCorsOrigin(), methods: ['GET', 'POST'] },
   namespace: '/spatial',
 })
 export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -101,6 +102,9 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const payload = RoomJoinPayloadSchema.parse(raw);
       const identity = await this.authenticate(socket);
+      if (!this.presence.consumeRateLimit(`join:${socket.id}`, 8, 0.5)) {
+        return this.fail('RATE_LIMITED', 'Too many join attempts, slow down');
+      }
 
       const room = await this.prisma.room.findUnique({
         where: { id: payload.roomId },
@@ -230,6 +234,9 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (!binding || binding.roomId !== payload.roomId) {
         return this.fail('NOT_IN_ROOM', 'Join the room before chatting');
       }
+      if (!this.presence.consumeRateLimit(`chat:${socket.id}`, 6, 1.5)) {
+        return this.fail('RATE_LIMITED', 'You are chatting too fast');
+      }
 
       const message: ChatMessageEvent = {
         id: crypto.randomUUID(),
@@ -257,6 +264,9 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const binding = this.presence.getBinding(socket.id);
       if (!binding || binding.roomId !== payload.roomId) {
         return this.fail('NOT_IN_ROOM', 'Join the room before emoting');
+      }
+      if (!this.presence.consumeRateLimit(`emote:${socket.id}`, 6, 1)) {
+        return this.fail('RATE_LIMITED', 'Too many emotes, slow down');
       }
 
       const animation = ANIMATION_BY_EMOTE[payload.emote];
@@ -293,6 +303,9 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (!binding || binding.roomId !== payload.roomId) {
         return this.fail('NOT_IN_ROOM', 'Join the room before spawning props');
       }
+      if (!this.presence.consumeRateLimit(`prop:${socket.id}`, 12, 0.5)) {
+        return this.fail('RATE_LIMITED', 'Too many props spawned, slow down');
+      }
 
       const room = await this.prisma.room.findUnique({
         where: { id: payload.roomId },
@@ -301,7 +314,13 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (!room) return this.fail('ROOM_NOT_FOUND', 'That room does not exist');
 
       const existingProps = parseSceneGraph(room.sceneGraph, room.templateId);
-      const merged: SceneProp[] = [...existingProps, ...payload.props].slice(-MAX_ROOM_PROPS);
+      const merged: SceneProp[] = [...existingProps, ...payload.props];
+      if (merged.length > MAX_ROOM_PROPS) {
+        return this.fail(
+          'INVALID_PAYLOAD',
+          `Room prop limit reached (${MAX_ROOM_PROPS}). Remove props before adding more.`,
+        );
+      }
 
       await this.prisma.room.update({
         where: { id: room.id },

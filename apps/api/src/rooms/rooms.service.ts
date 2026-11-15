@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { cloneTemplateScene, getRoomTemplate } from '@vybe/3d-core';
 import {
   parseAvatarConfig,
@@ -93,12 +93,15 @@ export class RoomsService {
     return this.toDetail(room);
   }
 
-  async updateScene(slug: string, sceneGraph: SceneProp[]): Promise<RoomDetail> {
+  async updateScene(slug: string, sceneGraph: SceneProp[], userId: string): Promise<RoomDetail> {
     const existing = await this.prisma.room.findUnique({
       where: { slug },
-      select: { id: true },
+      select: { id: true, ownerId: true },
     });
     if (!existing) throw new NotFoundException(`Room /${slug} not found`);
+    if (existing.ownerId && existing.ownerId !== userId) {
+      throw new ForbiddenException('Only the room owner can save the 3D scene layout');
+    }
 
     const room = await this.prisma.room.update({
       where: { slug },
