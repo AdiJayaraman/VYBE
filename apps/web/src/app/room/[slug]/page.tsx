@@ -15,6 +15,7 @@ import {
 import { SpatialHud } from '@/components/room/SpatialHud';
 import { neonPalette } from '@vybe/ui';
 import { api } from '@/lib/api';
+import { setLocalAudioPosition, setRemoteAudioPositions } from '@/lib/audio-proximity';
 import { useSession } from '@/lib/session';
 import { useSpatialRoom } from '@/lib/useSpatialRoom';
 import { useVoiceRoom } from '@/lib/useVoiceRoom';
@@ -83,6 +84,16 @@ export default function SpatialRoomPage() {
   });
 
   const voice = useVoiceRoom({ roomSlug: slug || null, token });
+
+  // Feed proximity audio with remote avatar positions (local ones come from the scene tick).
+  useEffect(() => {
+    const positions = new Map<string, [number, number, number]>();
+    for (const participant of spatial.participants) {
+      if (participant.userId === user?.id) continue;
+      positions.set(participant.userId, participant.position);
+    }
+    setRemoteAudioPositions(positions);
+  }, [spatial.participants, user?.id]);
 
   const self = useMemo(
     () => ({
@@ -182,6 +193,7 @@ export default function SpatialRoomPage() {
         self={self}
         spawnPosition={template.spawnPoint}
         onMove={spatial.sendMove}
+        onLocalTransform={setLocalAudioPosition}
       />
 
       <SpatialHud

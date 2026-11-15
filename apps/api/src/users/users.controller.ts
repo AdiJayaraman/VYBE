@@ -1,6 +1,11 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { AvatarConfigSchema, type AvatarConfig, type UserProfile } from '@vybe/shared-types';
+import {
+  AvatarConfigSchema,
+  type AvatarConfig,
+  type UserProfile,
+  type UserSearchResult,
+} from '@vybe/shared-types';
 import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
@@ -24,6 +29,14 @@ export class UsersController {
     @Body(new ZodValidationPipe(AvatarConfigSchema)) avatarConfig: AvatarConfig,
   ): Promise<UserProfile> {
     return this.usersService.updateAvatar(user.id, avatarConfig);
+  }
+
+  @Get('search')
+  async search(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('q') q: string | undefined,
+  ): Promise<UserSearchResult[]> {
+    return this.usersService.search(q ?? '', user.id);
   }
 
   @Get(':username')

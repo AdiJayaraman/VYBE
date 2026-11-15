@@ -6,6 +6,8 @@ import {
   type DirectMessageView,
   type SendMessageDto,
 } from '@vybe/shared-types';
+import { assertCleanContent } from '../common/content-filter.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 const authorSelect = {
@@ -27,7 +29,23 @@ type MessageRecord = {
 
 @Injectable()
 export class MessagesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
+
+  private async assertNotBlocked(a: string, b: string): Promise<void> {
+    const blocked = await this.prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: a, blockedId: b },
+          { blockerId: b, blockedId: a },
+        ],
+      },
+      select: { id: true },
+    });
+    if (blocked) throw new BadRequestException('This conversation is blocked');
+  }
 
   async getThread(viewerId: string, otherUserId: string): Promise<DirectMessageView[]> {
     const other = await this.prisma.user.findUnique({
@@ -35,6 +53,7 @@ export class MessagesService {
       select: { id: true },
     });
     if (!other) throw new NotFoundException('Conversation partner not found');
+    await this.assertNotBlocked(viewerId, otherUserId);
 
     await this.prisma.directMessage.updateMany({
       where: { senderId: otherUserId, recipientId: viewerId, readAt: null },
@@ -62,6 +81,8 @@ export class MessagesService {
     if (senderId === dto.recipientId) {
       throw new BadRequestException('You cannot message yourself');
     }
+    assertCleanContent(dto.content);
+    await this.assertNotBlocked(senderId, dto.recipientId);
 
     const recipient = await this.prisma.user.findUnique({
       where: { id: dto.recipientId },
@@ -87,6 +108,20 @@ export class MessagesService {
       include: {
         roomInvite: { select: { id: true, slug: true, name: true, themeTag: true } },
       },
+    });
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: senderId },
+      select: { displayName: true },
+    });
+    await this.notifications.notify({
+      userId: dto.recipientId,
+      actorId: senderId,
+      type: dto.roomInviteId ? 'ROOM_INVITE' : 'MESSAGE',
+      message: dto.roomInviteId
+        ? `${actor?.displayName ?? 'Someone'} invited you to a 3D room`
+        : `${actor?.displayName ?? 'Someone'} sent you a message`,
+      roomId: dto.roomInviteId ?? null,
     });
 
     return this.toView(created);

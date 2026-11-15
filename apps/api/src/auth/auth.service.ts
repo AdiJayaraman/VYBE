@@ -107,7 +107,7 @@ export class AuthService {
 
     const user = await this.findUserByAnyId(payload.sub);
     if (!user) throw new UnauthorizedException('Account no longer exists');
-    return { id: user.id, username: user.username, displayName: user.displayName, email: user.email };
+    return this.toAuthenticatedUser(user);
   }
 
   /** Returns `null` instead of throwing — used by optional-auth surfaces. */
@@ -174,6 +174,16 @@ export class AuthService {
     }
   }
 
+  private toAuthenticatedUser(user: User): AuthenticatedUser {
+    return {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      email: user.email,
+      role: user.role,
+    };
+  }
+
   private async findUserByAnyId(id: string): Promise<User | null> {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (isUuid) {
@@ -190,12 +200,7 @@ export class AuthService {
   private async syncSupabaseUser(payload: VybeJwtPayload): Promise<AuthenticatedUser | null> {
     const existing = await this.prisma.user.findUnique({ where: { supabaseId: payload.sub } });
     if (existing) {
-      return {
-        id: existing.id,
-        username: existing.username,
-        displayName: existing.displayName,
-        email: existing.email,
-      };
+      return this.toAuthenticatedUser(existing);
     }
 
     const email = payload.email ?? `${payload.sub}@supabase.local`;
@@ -205,12 +210,7 @@ export class AuthService {
         where: { id: byEmail.id },
         data: { supabaseId: payload.sub },
       });
-      return {
-        id: linked.id,
-        username: linked.username,
-        displayName: linked.displayName,
-        email: linked.email,
-      };
+      return this.toAuthenticatedUser(linked);
     }
 
     const baseUsername = (payload.username ?? email.split('@')[0] ?? 'vybe').toLowerCase().replace(/[^a-z0-9_]/g, '');
@@ -228,12 +228,7 @@ export class AuthService {
     });
 
     this.logger.log(`Provisioned VYBE profile for Supabase user ${payload.sub}`);
-    return {
-      id: created.id,
-      username: created.username,
-      displayName: created.displayName,
-      email: created.email,
-    };
+    return this.toAuthenticatedUser(created);
   }
 
   private async buildSession(user: User): Promise<AuthSession> {

@@ -120,6 +120,8 @@ async function main(): Promise<void> {
         avatarConfig: demoUser.avatarConfig,
         passwordHash,
         presence: 'ONLINE',
+        // Nova doubles as the demo moderator for the admin review queue.
+        role: demoUser.username === 'nova' ? 'ADMIN' : 'USER',
       },
       create: {
         email: demoUser.email,
@@ -129,6 +131,7 @@ async function main(): Promise<void> {
         avatarConfig: demoUser.avatarConfig,
         passwordHash,
         presence: 'ONLINE',
+        role: demoUser.username === 'nova' ? 'ADMIN' : 'USER',
       },
     });
     seededUsers.set(demoUser.username, user.id);

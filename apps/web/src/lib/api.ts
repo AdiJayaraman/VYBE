@@ -15,6 +15,12 @@ import type {
   SendMessageDto,
   UserProfile,
   VoiceTokenResponse,
+  CreateReportDto,
+  NotificationFeed,
+  ReportStatus,
+  ReportView,
+  UploadView,
+  UserSearchResult,
 } from '@vybe/shared-types';
 import type { AvatarConfig, SceneProp } from '@vybe/shared-types';
 
@@ -173,5 +179,105 @@ export const api = {
       body: { prompt },
       token,
     });
+  },
+
+  profile(token: string, username: string): Promise<UserProfile> {
+    return request<UserProfile>(`/users/${encodeURIComponent(username)}`, { token });
+  },
+
+  searchUsers(token: string, q: string): Promise<UserSearchResult[]> {
+    return request<UserSearchResult[]>(`/users/search?q=${encodeURIComponent(q)}`, { token });
+  },
+
+  userPosts(token: string, username: string, cursor?: string | null): Promise<CursorPage<FeedPost>> {
+    const params = new URLSearchParams({ limit: '10' });
+    if (cursor) params.set('cursor', cursor);
+    return request<CursorPage<FeedPost>>(
+      `/posts/author/${encodeURIComponent(username)}?${params.toString()}`,
+      { token },
+    );
+  },
+
+  comments(token: string, postId: string, cursor?: string | null): Promise<CursorPage<FeedComment>> {
+    const params = new URLSearchParams({ limit: '20' });
+    if (cursor) params.set('cursor', cursor);
+    return request<CursorPage<FeedComment>>(
+      `/posts/${encodeURIComponent(postId)}/comments?${params.toString()}`,
+      { token },
+    );
+  },
+
+  report(token: string, dto: CreateReportDto): Promise<ReportView> {
+    return request<ReportView>('/reports', { method: 'POST', body: dto, token });
+  },
+
+  adminReports(token: string, status: ReportStatus | 'ALL' = 'OPEN'): Promise<ReportView[]> {
+    return request<ReportView[]>(`/admin/reports?status=${status}`, { token });
+  },
+
+  resolveReport(token: string, id: string, status: ReportStatus): Promise<ReportView> {
+    return request<ReportView>(`/admin/reports/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: { status },
+      token,
+    });
+  },
+
+  blockUser(token: string, userId: string): Promise<{ blocked: boolean }> {
+    return request<{ blocked: boolean }>(`/users/${encodeURIComponent(userId)}/block`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  unblockUser(token: string, userId: string): Promise<{ blocked: boolean }> {
+    return request<{ blocked: boolean }>(`/users/${encodeURIComponent(userId)}/block`, {
+      method: 'DELETE',
+      token,
+    });
+  },
+
+  blockedUsers(token: string): Promise<UserSearchResult[]> {
+    return request<UserSearchResult[]>('/users/me/blocked', { token });
+  },
+
+  notifications(token: string): Promise<NotificationFeed> {
+    return request<NotificationFeed>('/notifications', { token });
+  },
+
+  markAllNotificationsRead(token: string): Promise<{ updated: number }> {
+    return request<{ updated: number }>('/notifications/read-all', { method: 'POST', token });
+  },
+
+  markNotificationRead(token: string, id: string): Promise<{ updated: number }> {
+    return request<{ updated: number }>(`/notifications/${encodeURIComponent(id)}/read`, {
+      method: 'POST',
+      token,
+    });
+  },
+
+  async uploadImage(token: string, file: File): Promise<UploadView> {
+    const form = new FormData();
+    form.append('file', file);
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/uploads`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+    } catch {
+      throw new ApiError(`Cannot reach the VYBE API at ${API_URL}. Is it running?`, 0);
+    }
+    if (!response.ok) {
+      let parsed: ErrorBody = {};
+      try {
+        parsed = (await response.json()) as ErrorBody;
+      } catch {
+        parsed = {};
+      }
+      throw new ApiError(parsed.message ?? `Upload failed (${response.status})`, response.status);
+    }
+    return (await response.json()) as UploadView;
   },
 };

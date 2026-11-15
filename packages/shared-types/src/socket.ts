@@ -23,7 +23,8 @@ export type SocketErrorCode =
   | 'NOT_IN_ROOM'
   | 'INVALID_PAYLOAD'
   | 'UNAUTHORIZED'
-  | 'RATE_LIMITED';
+  | 'RATE_LIMITED'
+  | 'CONTENT_BLOCKED';
 
 export interface RoomPlayerMovedEvent {
   roomId: string;

@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Room, RoomEvent } from 'livekit-client';
+import { Room, RoomEvent, type RemoteParticipant } from 'livekit-client';
 import { api } from './api';
+import { clearAudioPositions, proximityVolume } from './audio-proximity';
 
 export type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'error';
 
@@ -38,7 +39,21 @@ export function useVoiceRoom({
       const room = roomRef.current;
       roomRef.current = null;
       if (room) room.disconnect();
+      clearAudioPositions();
     };
+  }, []);
+
+  // Spatialise voice: every remote track follows the avatar distance.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const room = roomRef.current;
+      if (!room) return;
+      for (const participant of room.remoteParticipants.values()) {
+        const remote = participant as RemoteParticipant;
+        remote.setVolume(proximityVolume(remote.identity));
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
   }, []);
 
   const leave = useCallback((): void => {
@@ -48,6 +63,7 @@ export function useVoiceRoom({
     setStatus('idle');
     setParticipants(0);
     setMuted(true);
+    clearAudioPositions();
   }, []);
 
   const join = useCallback(async (): Promise<void> => {

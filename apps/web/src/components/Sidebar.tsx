@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, useSession } from '@/lib/session';
 import { ActiveRoomWidget } from './ActiveRoomWidget';
+import { NotificationsPanel } from './NotificationsPanel';
+import { SearchBox } from './SearchBox';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Feed', glyph: '◉', hint: '2D social stream' },
@@ -70,8 +72,18 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-8">
+      <div className="mt-7 flex flex-col gap-2">
+        <SearchBox />
         <ActiveRoomWidget />
+        <NotificationsPanel />
+        {user?.role === 'ADMIN' ? (
+          <Link
+            href="/admin"
+            className="rounded-xl border border-vybe-danger/40 bg-vybe-danger/10 px-3 py-2 text-[11px] font-semibold text-vybe-danger transition hover:border-vybe-danger/70"
+          >
+            🛡 Moderation queue
+          </Link>
+        ) : null}
       </div>
 
       <div className="mt-auto pt-6">

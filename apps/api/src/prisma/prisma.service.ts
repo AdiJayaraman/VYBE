@@ -41,6 +41,18 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.directMessage;
   }
 
+  get report() {
+    return this.client.report;
+  }
+
+  get block() {
+    return this.client.block;
+  }
+
+  get notification() {
+    return this.client.notification;
+  }
+
   async onModuleDestroy(): Promise<void> {
     try {
       await this.client.$disconnect();

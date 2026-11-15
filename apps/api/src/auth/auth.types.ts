@@ -3,6 +3,7 @@ export interface AuthenticatedUser {
   username: string;
   displayName: string;
   email: string;
+  role: 'USER' | 'ADMIN';
 }
 
 export interface VybeJwtPayload {

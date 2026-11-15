@@ -179,6 +179,17 @@ Every route except `auth/login|register` requires `Authorization: Bearer <token>
 | POST   | `/messages`                      | DM, optional `roomInviteId`                  |
 | POST   | `/ai/generate-room-layout`       | Prompt → `SceneProp[]` (Gemini 3.1 Flash Lite, sanitized + clamped) |
 | POST   | `/voice/token`                   | LiveKit join grant scoped to one room (15 min) |
+| POST   | `/uploads`                       | Multipart image upload (png/jpeg/webp/gif, 8 MB) → absolute URL |
+| GET    | `/users/search?q=`               | Member search (blocked accounts excluded)    |
+| POST/DELETE | `/users/:id/block`          | Block / unblock an account                   |
+| GET    | `/users/me/blocked`              | Accounts you blocked                         |
+| GET    | `/posts/author/:username`        | That member's posts (cursor-paginated)       |
+| GET    | `/posts/:id/comments?cursor=`    | Comment pagination                           |
+| POST   | `/reports`                       | Report a post, comment, user or room         |
+| GET    | `/admin/reports?status=`         | Moderation queue (admin only)                |
+| PATCH  | `/admin/reports/:id`             | Resolve or dismiss a report (admin only)     |
+| GET    | `/notifications`                 | Activity feed + unread count                 |
+| POST   | `/notifications/read-all`        | Mark every notification read                 |
 
 ## Real-time protocol (`/spatial` namespace)
 
@@ -207,6 +218,27 @@ LiveKit room (`vybe-<roomId>`), so you hear the people you can see on screen.
 Without the three `LIVEKIT_*` variables the endpoint returns **503** and the HUD reports that voice is
 not configured — the rest of the app keeps working. Microphone permissions are requested by the
 browser on first join.
+
+## Moderation, blocking and safety
+
+- **Automatic content filter** (`apps/api/src/common/content-filter.ts`) runs before any post,
+  comment, DM or room chat is stored or broadcast: link floods, repeated-character spam, hidden
+  zero-width characters, all-caps shouting and a blocked-phrase list are rejected with `400`
+  (socket chat gets `CONTENT_BLOCKED`).
+- **Reports** can target a post, comment, user or room. Duplicate open reports by the same person are
+  rejected. `/admin/reports` is gated by `role = ADMIN` (the seeded `nova@vybe.space` is the demo
+  moderator) and supports resolve/dismiss; the web queue lives at `/admin`.
+- **Blocks** are one-directional and reciprocal in effect: a blocked author disappears from your
+  feed, DMs in either direction return `400`, and existing follows are severed.
+- Uploads are limited to images, 8 MB, served from `/uploads` (disk in development — point
+  `PUBLIC_API_URL` at your CDN/bucket origin when you move to object storage).
+
+## Notifications, search and profiles
+
+- Follows, likes, comments, DMs and room invites create in-app notifications (never self-notifying),
+  surfaced in the sidebar bell with unread counts and mark-all-read.
+- Sidebar search queries `/users/search` and links to `/u/:username`, which shows the member's posts,
+  counts, presence, follow/block/report actions and a load-more cursor.
 
 ## Authentication
 
@@ -256,6 +288,12 @@ pnpm test     # vitest: 32 unit tests across @vybe/3d-core, @vybe/shared-types, 
 
 `.github/workflows/ci.yml` runs install → `pnpm db:generate` → typecheck → test → build on every push
 to `main` and every pull request.
+
+## Spatial audio
+
+LiveKit is room-wide by contract, so VYBE attenuates each remote track client-side: full volume within
+3 m of another avatar, linear falloff to silence at 16 m, recomputed four times a second from the
+15 Hz avatar transforms (`apps/web/src/lib/audio-proximity.ts`). Nothing about this touches the DB.
 
 ## Scaling note
 

@@ -1,9 +1,11 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import {
+  CommentsQuerySchema,
   CreateCommentDtoSchema,
   CreatePostDtoSchema,
   FeedQuerySchema,
+  type CommentsQuery,
   type CreateCommentDto,
   type CreatePostDto,
   type CursorPage,
@@ -28,6 +30,23 @@ export class PostsController {
     @Query(new ZodValidationPipe(FeedQuerySchema)) query: FeedQuery,
   ): Promise<CursorPage<FeedPost>> {
     return this.postsService.getFeed(user.id, query);
+  }
+
+  @Get('author/:username')
+  async authorFeed(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('username') username: string,
+    @Query(new ZodValidationPipe(FeedQuerySchema)) query: FeedQuery,
+  ): Promise<CursorPage<FeedPost>> {
+    return this.postsService.getUserPosts(username, user.id, query);
+  }
+
+  @Get(':id/comments')
+  async comments(
+    @Param('id') id: string,
+    @Query(new ZodValidationPipe(CommentsQuerySchema)) query: CommentsQuery,
+  ): Promise<CursorPage<FeedComment>> {
+    return this.postsService.getComments(id, query);
   }
 
   @Post()

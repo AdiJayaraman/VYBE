@@ -25,6 +25,12 @@ export const FeedQuerySchema = z.object({
 });
 export type FeedQuery = z.infer<typeof FeedQuerySchema>;
 
+export const CommentsQuerySchema = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export type CommentsQuery = z.infer<typeof CommentsQuerySchema>;
+
 export const SendMessageDtoSchema = z.object({
   recipientId: z.string().min(1),
   content: z.string().trim().min(1).max(1000),
@@ -147,6 +153,8 @@ export interface UserProfile {
   username: string;
   displayName: string;
   bio: string;
+  role: 'USER' | 'ADMIN';
+  isBlockedByMe: boolean;
   avatarConfig: AuthorSummary['avatarConfig'];
   presence: 'OFFLINE' | 'ONLINE' | 'IN_ROOM';
   currentRoom: { id: string; slug: string; name: string } | null;

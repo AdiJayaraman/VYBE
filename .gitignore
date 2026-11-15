@@ -26,3 +26,6 @@ npm-debug.log*
 
 # Turbo
 .turbo/
+
+# Uploaded media (local dev)
+apps/api/uploads/

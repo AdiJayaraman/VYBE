@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import type { FeedPost } from '@vybe/shared-types';
+import type { FeedComment, FeedPost } from '@vybe/shared-types';
+import { ReportButton } from '@/components/ReportButton';
+import { api } from '@/lib/api';
 import { initials, timeAgo } from '@/lib/format';
+import { useSession } from '@/lib/session';
 
 interface PostCardProps {
   post: FeedPost;
@@ -12,8 +15,13 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onLike, onComment }: PostCardProps) {
+  const { token } = useSession();
   const [commentDraft, setCommentDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const [olderComments, setOlderComments] = useState<FeedComment[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const submitComment = async (): Promise<void> => {
     const content = commentDraft.trim();
@@ -27,19 +35,40 @@ export function PostCard({ post, onLike, onComment }: PostCardProps) {
     }
   };
 
+  const loadAllComments = async (): Promise<void> => {
+    if (!token || loadingComments) return;
+    setLoadingComments(true);
+    setShowAll(true);
+    try {
+      const page = await api.comments(token, post.id, cursor);
+      setOlderComments((current) => [...page.items, ...current]);
+      setCursor(page.nextCursor);
+    } catch {
+      setCursor(null);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const visibleComments = showAll ? [...olderComments, ...post.latestComments] : post.latestComments;
+
   return (
     <article className="glass-panel animate-rise rounded-2xl p-4">
       <header className="flex items-center gap-3">
-        <span
+        <Link
+          href={`/u/${post.author.username}`}
           className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
           style={{ background: post.author.avatarConfig.topColor }}
         >
           {initials(post.author.displayName)}
-        </span>
+        </Link>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-vybe-text-primary">
+          <Link
+            href={`/u/${post.author.username}`}
+            className="block truncate text-sm font-semibold text-vybe-text-primary hover:text-vybe-accent"
+          >
             {post.author.displayName}
-          </p>
+          </Link>
           <p className="text-[11px] text-vybe-text-secondary">
             @{post.author.username} · {timeAgo(post.createdAt)}
           </p>
@@ -111,24 +140,43 @@ export function PostCard({ post, onLike, onComment }: PostCardProps) {
           <span className="text-sm">{post.likedByMe ? '♥' : '♡'}</span>
           {post.likeCount}
         </button>
-        <span className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => void loadAllComments()}
+          className="flex items-center gap-1.5 rounded-full px-2.5 py-1 transition hover:bg-white/5 hover:text-vybe-text-primary"
+        >
           <span className="text-sm">💬</span>
           {post.commentCount}
-        </span>
+        </button>
         <span className="ml-auto text-[9px] uppercase tracking-[0.2em]">{timeAgo(post.createdAt)}</span>
+        <ReportButton targetType="POST" targetId={post.id} label="Report" />
       </footer>
 
-      {post.latestComments.length > 0 ? (
+      {visibleComments.length > 0 ? (
         <ul className="mt-2 space-y-1.5">
-          {post.latestComments.map((comment) => (
+          {visibleComments.map((comment) => (
             <li key={comment.id} className="text-[11px] leading-relaxed text-vybe-text-secondary">
-              <span className="font-semibold text-vybe-text-primary/90">
+              <Link
+                href={`/u/${comment.author.username}`}
+                className="font-semibold text-vybe-text-primary/90 hover:text-vybe-accent"
+              >
                 {comment.author.displayName}
-              </span>{' '}
+              </Link>{' '}
               {comment.content}
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {post.commentCount > post.latestComments.length ? (
+        <button
+          type="button"
+          onClick={() => void loadAllComments()}
+          disabled={loadingComments || cursor === null && showAll}
+          className="mt-1.5 text-[10px] text-vybe-accent hover:text-vybe-accent/80"
+        >
+          {loadingComments ? 'Loading…' : `View all ${post.commentCount} comments`}
+        </button>
       ) : null}
 
       <div className="mt-2 flex gap-2">

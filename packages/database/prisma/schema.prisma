@@ -14,6 +14,26 @@ enum Presence {
   IN_ROOM
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  HATE
+  NSFW
+  SCAM
+  OTHER
+}
+
 /// A VYBE member. `avatarConfig` holds the modular 3D avatar JSON, and
 /// `currentRoomId` is the only spatial field persisted (never positions).
 model User {
@@ -27,6 +47,7 @@ model User {
   passwordHash String?
   avatarConfig Json?
   presence     Presence @default(OFFLINE)
+  role         Role     @default(USER)
   currentRoomId String? @db.Uuid
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -40,6 +61,11 @@ model User {
   followers    Follow[]  @relation("FollowFollowing")
   sentMessages     DirectMessage[] @relation("MessageSender")
   receivedMessages DirectMessage[] @relation("MessageRecipient")
+  reportsMade      Report[]        @relation("ReportReporter")
+  notifications    Notification[]  @relation("NotificationRecipient")
+  notificationActions Notification[] @relation("NotificationActor")
+  blocksMade       Block[]         @relation("BlockBlocker")
+  blocksReceived   Block[]         @relation("BlockBlocked")
 
   @@index([currentRoomId])
 }
@@ -142,4 +168,56 @@ model DirectMessage {
 
   @@index([senderId, recipientId, createdAt])
   @@index([recipientId, createdAt])
+}
+
+/// A user-filed moderation report. Exactly one target field is populated.
+model Report {
+  id          String       @id @default(uuid()) @db.Uuid
+  reporterId  String       @db.Uuid
+  targetType  String
+  targetId    String
+  reason      ReportReason
+  details     String       @default("")
+  status      ReportStatus @default(OPEN)
+  createdAt   DateTime     @default(now())
+  reviewedAt  DateTime?
+  reviewedById String?     @db.Uuid
+
+  reporter User @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([reporterId, createdAt])
+}
+
+/// One-directional block. A blocked user's posts/DMs disappear for the blocker.
+model Block {
+  id        String   @id @default(uuid()) @db.Uuid
+  blockerId String   @db.Uuid
+  blockedId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  blocker User @relation("BlockBlocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockBlocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+/// In-app notification. The message is pre-rendered so clients stay dumb.
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  actorId   String?   @db.Uuid
+  type      String
+  message   String
+  postId    String?   @db.Uuid
+  roomId    String?   @db.Uuid
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user  User @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }

@@ -36,7 +36,16 @@
 - [x] Mobile Room Portal: virtual joystick, live chat, participant presence on `/spatial`
 - [x] Gemini API integration in `apps/api` for room theme generation (deterministic fallback)
 - [x] Mobile sign-in screen (email/password + demo accounts)
-- [ ] Chat/content moderation (not implemented — see Known Gaps)
+
+## Phase 6: Moderation & Social Completeness
+- [x] Reports (post/comment/user/room), duplicate detection, admin-only queue, resolve/dismiss
+- [x] Heuristic content filter for posts, comments, DMs and room chat (`CONTENT_BLOCKED` on sockets)
+- [x] Blocks: feed filtering, DM/follow rejection, profile block state
+- [x] Notifications (follow/like/comment/DM/room invite) with unread counts and mark-all-read
+- [x] Member search, standalone profile pages with follow/block/report
+- [x] Comment pagination and per-author feeds
+- [x] Image uploads (8 MB, png/jpeg/webp/gif) with static serving
+- [x] Distance-attenuated LiveKit audio (3 m full volume → silence at 16 m)
 
 ## Verification Log
 - [x] `pnpm install` — 847 packages, lockfile committed
@@ -66,6 +75,10 @@
       transform broadcast, chat, prop broadcast, disconnect cleanup, `sceneGraph` persisted, occupancy
 - [x] Live integrations — 7/7 (login, voice grant, LiveKit credential check, Gemini 10-prop layout in
       2.6 s, invalid bearer rejected, real registration)
+- [x] Moderation & social suite — 23 checks: admin role exposure, search, profile block state,
+      notifications for like/comment + mark-all-read, spam rejected on post/comment/DM/socket chat,
+      report create/duplicate/admin queue/non-admin 403/resolve, block hides feed and blocks DMs/follows,
+      comment pagination across two pages, author feeds, image upload + static serving, non-image rejected
 
 > Runtime verification ran against a real PostgreSQL 18 instance (embedded binaries on port 5544,
 > migrated with `prisma migrate deploy` and seeded). An earlier PGlite harness surfaced a real bug: the
@@ -73,13 +86,11 @@
 > `.env` before the module graph is evaluated.
 
 ## Known Gaps (not yet production-complete)
-- [ ] Supabase sign-in UI: the API verifies Supabase ES256 tokens against JWKS, but the project still
-      has email confirmation enabled, so a Supabase-issued token could not be obtained to test the
-      happy path end-to-end. VYBE's own email/password auth is the wired default.
-- [ ] Voice is room-wide rather than distance-attenuated audio (LiveKit audio is not spatialised yet).
-- [ ] Moderation, reporting, blocking, and per-user AI quotas.
-- [ ] Media uploads (posts accept URLs only).
+- [ ] Supabase sign-in UI: the API verifies Supabase ES256 tokens against JWKS (happy path proven),
+      but the web/mobile clients still sign in with VYBE credentials — no Supabase SDK flow is wired.
 - [ ] Multi-instance realtime: in-memory presence/gateway; Redis adapter + shared presence pending.
 - [ ] Mobile 3D viewport (Room Portal is 2D joystick + chat + presence).
+- [ ] Mobile proximity voice (needs a LiveKit React Native dev build).
+- [ ] Per-user AI quotas (currently IP-throttled).
 - [ ] Notifications, user search, profile pages, comment pagination.
 - [ ] Deployment manifests/secrets for web (Vercel) and API (Railway/Render/Fly).

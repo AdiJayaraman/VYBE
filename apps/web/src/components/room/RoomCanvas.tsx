@@ -25,6 +25,7 @@ export interface RoomCanvasProps {
   self: { id: string; displayName: string; avatarConfig: AvatarConfig };
   spawnPosition: Vec3;
   onMove: (payload: PlayerTransformPayload) => void;
+  onLocalTransform?: (position: Vec3) => void;
 }
 
 const BUBBLE_TTL_MS = 7000;
@@ -39,6 +40,7 @@ export default function RoomCanvas({
   self,
   spawnPosition,
   onMove,
+  onLocalTransform,
 }: RoomCanvasProps) {
   const remoteParticipants = useMemo(
     () => participants.filter((participant) => participant.userId !== self.id),
@@ -93,6 +95,7 @@ export default function RoomCanvas({
         avatarConfig={self.avatarConfig}
         displayName={self.displayName}
         onMove={onMove}
+        {...(onLocalTransform ? { onTransform: onLocalTransform } : {})}
       />
 
       {remoteParticipants.map((participant) => {

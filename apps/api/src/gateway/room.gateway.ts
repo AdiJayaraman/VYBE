@@ -34,6 +34,7 @@ import {
 } from '@vybe/shared-types';
 import { z } from 'zod';
 import { AuthService } from '../auth/auth.service.js';
+import { moderateContent } from '../common/content-filter.js';
 import { resolveCorsOrigin } from '../common/cors.js';
 import { parseSceneGraph } from '../common/scene.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -236,6 +237,10 @@ export class RoomGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
       if (!this.presence.consumeRateLimit(`chat:${socket.id}`, 6, 1.5)) {
         return this.fail('RATE_LIMITED', 'You are chatting too fast');
+      }
+      const verdict = moderateContent(payload.content);
+      if (!verdict.allowed) {
+        return this.fail('CONTENT_BLOCKED', verdict.reason ?? 'Message blocked by moderation');
       }
 
       const message: ChatMessageEvent = {

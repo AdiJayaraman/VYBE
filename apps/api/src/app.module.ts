@@ -11,6 +11,9 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { RoomsModule } from './rooms/rooms.module.js';
 import { UsersModule } from './users/users.module.js';
 import { GatewayModule } from './gateway/gateway.module.js';
+import { ModerationModule } from './moderation/moderation.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { UploadsModule } from './uploads/uploads.module.js';
 import { VoiceModule } from './voice/voice.module.js';
 
 @Module({
@@ -30,6 +33,9 @@ import { VoiceModule } from './voice/voice.module.js';
     MessagesModule,
     AiModule,
     VoiceModule,
+    NotificationsModule,
+    ModerationModule,
+    UploadsModule,
     GatewayModule,
   ],
   controllers: [HealthController],

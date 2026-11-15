@@ -25,6 +25,8 @@ export interface LocalPlayerProps {
   avatarConfig: AvatarConfig;
   displayName: string;
   onMove: (payload: PlayerTransformPayload) => void;
+  /** Local position at the network tick, used for proximity audio. */
+  onTransform?: (position: Vec3) => void;
 }
 
 const CAMERA_DISTANCE = 5.2;
@@ -39,6 +41,7 @@ export function LocalPlayer({
   avatarConfig,
   displayName,
   onMove,
+  onTransform,
 }: LocalPlayerProps) {
   const groupRef = useRef<Group>(null);
   const positionRef = useRef<Vec3>([...spawnPosition]);
@@ -154,12 +157,14 @@ export function LocalPlayer({
     emitClockRef.current += delta * 1000;
     if (emitClockRef.current >= ROOM_MOVE_TICK_MS) {
       emitClockRef.current = 0;
-      onMove({
+      const transform: PlayerTransformPayload = {
         roomId,
         position: [Number(position[0].toFixed(3)), Number((position[1] + jumpRef.current.height).toFixed(3)), Number(position[2].toFixed(3))],
         rotation: Number(yawRef.current.toFixed(3)),
         animation: animationRef.current,
-      });
+      };
+      onMove(transform);
+      onTransform?.(transform.position);
     }
 
     void state;

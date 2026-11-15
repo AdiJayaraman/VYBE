@@ -7,16 +7,23 @@ export interface ProfileSourceUser {
   bio: string;
   avatarConfig: unknown;
   presence: UserProfile['presence'];
+  role: UserProfile['role'];
   currentRoom: { id: string; slug: string; name: string } | null;
   _count: { followers: number; following: number; posts: number };
 }
 
-export function mapUserProfile(user: ProfileSourceUser, isFollowedByMe: boolean): UserProfile {
+export function mapUserProfile(
+  user: ProfileSourceUser,
+  isFollowedByMe: boolean,
+  isBlockedByMe = false,
+): UserProfile {
   return {
     id: user.id,
     username: user.username,
     displayName: user.displayName,
     bio: user.bio,
+    role: user.role,
+    isBlockedByMe,
     avatarConfig: parseAvatarConfig(user.avatarConfig),
     presence: user.presence,
     currentRoom: user.currentRoom,

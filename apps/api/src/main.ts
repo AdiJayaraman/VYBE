@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
+import { join } from 'node:path';
 import { AppModule } from './app.module.js';
 import { AllExceptionsFilter } from './common/all-exceptions.filter.js';
 import { resolveCorsOrigin } from './common/cors.js';
@@ -19,6 +20,8 @@ async function bootstrap(): Promise<void> {
   app.useBodyParser('urlencoded', { limit: '1mb', extended: true });
 
   app.setGlobalPrefix('api');
+  // Uploaded media is served from disk in development; swap for object storage in prod.
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
   app.enableCors({
     origin: resolveCorsOrigin(),
     credentials: true,
