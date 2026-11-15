@@ -50,6 +50,9 @@ importers:
       '@vybe/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
+      dotenv:
+        specifier: ^18.0.10
+        version: 18.0.10
       helmet:
         specifier: ^8.3.0
         version: 8.3.0

@@ -59,8 +59,18 @@
       owner scene save allowed (200), socket chat throttled (6 ok / 4 RATE_LIMITED), login throttled (429)
 - [x] `docker compose up -d` (PostgreSQL 16 + Redis 7) and GitHub Actions CI workflow added
 
-> Runtime verification was performed against a local PGlite (PostgreSQL-compatible) server on port
-> 5432 with `VYBE_PG_POOL_MAX=1`; the project itself targets standard PostgreSQL (see README).
+- [x] Supabase ES256 sign-in — 6/6: password/signup grant from Supabase, ES256 token with `kid`
+      verified against the project JWKS, VYBE profile provisioned from `sub`, stable identity across
+      requests, authenticated feed access
+- [x] Two-client Socket.IO session on PostgreSQL — 9/9: join ack with 2 participants, `player_joined`,
+      transform broadcast, chat, prop broadcast, disconnect cleanup, `sceneGraph` persisted, occupancy
+- [x] Live integrations — 7/7 (login, voice grant, LiveKit credential check, Gemini 10-prop layout in
+      2.6 s, invalid bearer rejected, real registration)
+
+> Runtime verification ran against a real PostgreSQL 18 instance (embedded binaries on port 5544,
+> migrated with `prisma migrate deploy` and seeded). An earlier PGlite harness surfaced a real bug: the
+> shared Prisma client resolves `DATABASE_URL` at import time, so `apps/api/src/main.ts` now loads
+> `.env` before the module graph is evaluated.
 
 ## Known Gaps (not yet production-complete)
 - [ ] Supabase sign-in UI: the API verifies Supabase ES256 tokens against JWKS, but the project still

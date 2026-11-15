@@ -1,3 +1,6 @@
+// Must come first: `@vybe/database` builds its Prisma client at import time, so
+// DATABASE_URL has to be in process.env before the module graph is evaluated.
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
