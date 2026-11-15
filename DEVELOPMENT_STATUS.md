@@ -9,12 +9,13 @@
 
 ## Phase 2: NestJS Backend Core (`apps/api`)
 - [x] PrismaModule & global validation pipes
-- [x] AuthModule (Supabase JWT verification + demo login/register)
+- [x] AuthModule (email/password login/register, Supabase JWKS verification for ES256/RS256/HS256)
 - [x] UsersModule (profile, avatar update, follow/unfollow)
 - [x] PostsModule (2D feed CRUD + linked 3D room snapshots)
 - [x] RoomsModule (REST endpoints for creating/listing 3D rooms + scene save)
 - [x] MessagesModule (DMs + 3D room invite cards)
-- [x] AiModule (Gemini room-layout generation with deterministic fallback)
+- [x] AiModule (Gemini 3.1 Flash Lite room-layout generation with deterministic fallback)
+- [x] VoiceModule (LiveKit room-scoped join grants, 15-minute TTL)
 
 ## Phase 3: Real-Time Multiplayer Gateway (`apps/api`)
 - [x] `RoomGateway` Socket.IO server (`room:join`, `room:leave`, `room:move`, `room:chat`, `room:emote`, `room:prop_added`)
@@ -27,11 +28,14 @@
 - [x] Avatar Customizer modal (skin, hair, outfit color/mesh config)
 - [x] Multiplayer 3D Room Canvas (`@react-three/fiber` + local WASD controller + remote player `lerp`/`slerp` interpolation + HUD overlay)
 - [x] Glassmorphic HUD: chat drawer, emote wheel, prop spawner, AI Room Builder
+- [x] Sign-in / sign-up screen with demo shortcuts, persisted session and sign-out
+- [x] LiveKit proximity voice: join/leave, live mic mute, participant count
 
 ## Phase 5: Mobile Client (`apps/mobile`) & AI Features
 - [x] Expo app with shared `@vybe/ui` tokens (feed, rooms, avatar, DMs tabs)
 - [x] Mobile Room Portal: virtual joystick, live chat, participant presence on `/spatial`
 - [x] Gemini API integration in `apps/api` for room theme generation (deterministic fallback)
+- [x] Mobile sign-in screen (email/password + demo accounts)
 - [ ] Chat/content moderation (not implemented — see Known Gaps)
 
 ## Verification Log
@@ -40,7 +44,11 @@
 - [x] `pnpm typecheck` — 11/11 Turbo tasks pass across all 7 workspaces
 - [x] `pnpm build` — 6/6 Turbo tasks pass (Nest ESM build + Next 16 static/dynamic routes)
 - [x] `pnpm db:push` + `pnpm --filter @vybe/database seed` — schema synced and seeded (3 users, 3 rooms, 4 posts)
-- [x] REST smoke test — demo login, `/posts/feed`, `/rooms`, `/rooms/:slug`, `/ai/generate-room-layout` (deterministic fallback)
+- [x] REST smoke test — demo login, `/posts/feed`, `/rooms`, `/rooms/:slug`
+- [x] Live integrations — 8/8 checks with real credentials: email/password login + register,
+      `POST /api/voice/token` (grant scoped to `vybe-<roomId>`), LiveKit `RoomService/ListRooms`
+      accepts the project key/secret, Gemini produced a 10-prop layout in 1.9 s (`source=gemini`),
+      malformed bearer rejected with 401
 - [x] Two-client Socket.IO session — 13/13 checks: auth rejection, join/state sync, player joined,
       move broadcast, chat, emote, live prop add, sceneGraph persistence, occupancy, disconnect cleanup,
       presence persisted to PostgreSQL
@@ -55,9 +63,10 @@
 > 5432 with `VYBE_PG_POOL_MAX=1`; the project itself targets standard PostgreSQL (see README).
 
 ## Known Gaps (not yet production-complete)
-- [ ] Real auth UX: no sign-in/up screens; web + mobile auto-login demo users. Supabase tokens are
-      verified server-side (HS256) but no client is wired and RS256/JWKS is unsupported.
-- [ ] Proximity voice: the HUD toggle plays local ambience only; no WebRTC/LiveKit audio transport.
+- [ ] Supabase sign-in UI: the API verifies Supabase ES256 tokens against JWKS, but the project still
+      has email confirmation enabled, so a Supabase-issued token could not be obtained to test the
+      happy path end-to-end. VYBE's own email/password auth is the wired default.
+- [ ] Voice is room-wide rather than distance-attenuated audio (LiveKit audio is not spatialised yet).
 - [ ] Moderation, reporting, blocking, and per-user AI quotas.
 - [ ] Media uploads (posts accept URLs only).
 - [ ] Multi-instance realtime: in-memory presence/gateway; Redis adapter + shared presence pending.

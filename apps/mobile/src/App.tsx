@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { TabBar, type TabKey } from './components/TabBar';
 import { theme } from './lib/theme';
 import { DEMO_ACCOUNTS, MobileSessionProvider, useMobileSession } from './lib/session';
+import { LoginScreen } from './screens/LoginScreen';
 import { AvatarScreen } from './screens/AvatarScreen';
 import { FeedScreen } from './screens/FeedScreen';
 import { MessagesScreen } from './screens/MessagesScreen';
@@ -16,9 +17,18 @@ interface ActiveRoom {
 }
 
 function Shell() {
-  const { status, user, error, signInAs, retry } = useMobileSession();
+  const { user, signInAs, signOut } = useMobileSession();
   const [tab, setTab] = useState<TabKey>('feed');
   const [activeRoom, setActiveRoom] = useState<ActiveRoom | null>(null);
+
+  if (!user) {
+    return (
+      <View style={styles.loginRoot}>
+        <StatusBar style="light" />
+        <LoginScreen />
+      </View>
+    );
+  }
 
   if (activeRoom) {
     return (
@@ -49,28 +59,23 @@ function Shell() {
           </View>
         </View>
 
-        {status === 'error' ? (
-          <Pressable onPress={retry} style={styles.errorPill}>
-            <Text style={styles.errorText} numberOfLines={1}>
-              {error ?? 'API offline'} · tap to retry
-            </Text>
+        <View style={styles.accountRow}>
+          {DEMO_ACCOUNTS.map((account) => (
+            <Pressable
+              key={account.email}
+              onPress={() => void signInAs(account.email)}
+              style={[
+                styles.accountChip,
+                user.username === account.email.split('@')[0] && styles.accountChipActive,
+              ]}
+            >
+              <Text style={styles.accountText}>{account.label}</Text>
+            </Pressable>
+          ))}
+          <Pressable onPress={signOut} style={styles.accountChip}>
+            <Text style={styles.accountText}>sign out</Text>
           </Pressable>
-        ) : (
-          <View style={styles.accountRow}>
-            {DEMO_ACCOUNTS.map((account) => (
-              <Pressable
-                key={account.email}
-                onPress={() => void signInAs(account.email)}
-                style={[
-                  styles.accountChip,
-                  user?.username === account.email.split('@')[0] && styles.accountChipActive,
-                ]}
-              >
-                <Text style={styles.accountText}>{account.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -95,6 +100,7 @@ export function App() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.colors.background, paddingTop: Platform.OS === 'ios' ? 52 : 32 },
+  loginRoot: { flex: 1, backgroundColor: theme.colors.background, paddingTop: Platform.OS === 'ios' ? 52 : 32 },
   header: {
     paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.sm,

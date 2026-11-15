@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   cloneTemplateScene,
   generateDeterministicLayout,
@@ -15,8 +14,26 @@ import {
 } from '@vybe/shared-types';
 import { z } from 'zod';
 
-const MODEL_ID = 'gemini-2.0-flash';
+/**
+ * Gemini 2.x is retired for new API keys, and the 3.8 thinking models take 60s+
+ * for structured output. 3.1 Flash Lite with thinking disabled answers in ~1s.
+ */
+const MODEL_ID = 'gemini-3.1-flash-lite';
+const GEMINI_TIMEOUT_MS = 25_000;
 const PropArraySchema = z.array(ScenePropSchema).min(1).max(64);
+
+interface GeminiPart {
+  text?: string;
+}
+
+interface GeminiCandidate {
+  content?: { parts?: GeminiPart[] };
+}
+
+interface GeminiResponse {
+  candidates?: GeminiCandidate[];
+  error?: { message?: string };
+}
 
 @Injectable()
 export class AiService {
@@ -44,15 +61,6 @@ export class AiService {
     }
 
     try {
-      const client = new GoogleGenerativeAI(apiKey);
-      const model = client.getGenerativeModel({
-        model: MODEL_ID,
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.9,
-        },
-      });
-
       const template = getRoomTemplate(fallback.templateId);
       const prompt = [
         'You are VYBE\'s 3D room architect. Convert the user request into furniture props.',
@@ -64,8 +72,33 @@ export class AiService {
         `User request: ${dto.prompt}`,
       ].join('\n');
 
-      const result = await model.generateContent(prompt);
-      const raw = result.response.text();
+      const result = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.9,
+              // Structured output does not benefit from reasoning tokens here.
+              thinkingConfig: { thinkingBudget: 0 },
+            },
+          }),
+          signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+        },
+      );
+
+      if (!result.ok) {
+        const failure = (await result.json().catch(() => null)) as GeminiResponse | null;
+        throw new Error(`Gemini HTTP ${result.status}: ${failure?.error?.message ?? 'request failed'}`);
+      }
+
+      const payload = (await result.json()) as GeminiResponse;
+      const raw = (payload.candidates?.[0]?.content?.parts ?? [])
+        .map((part) => part.text ?? '')
+        .join('');
       const parsedJson: unknown = JSON.parse(raw);
 
       const envelope = z

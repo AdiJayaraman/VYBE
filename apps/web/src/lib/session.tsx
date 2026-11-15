@@ -28,7 +28,14 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
 
 const DEMO_PASSWORD = 'vybe1234';
 
-export type SessionStatus = 'loading' | 'ready' | 'error';
+export type SessionStatus = 'loading' | 'signed_out' | 'ready' | 'error';
+
+export interface RegisterInput {
+  email: string;
+  password: string;
+  username: string;
+  displayName: string;
+}
 
 interface SessionContextValue {
   status: SessionStatus;
@@ -36,6 +43,7 @@ interface SessionContextValue {
   user: UserProfile | null;
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (input: RegisterInput) => Promise<void>;
   signOut: () => void;
   setUser: (user: UserProfile) => void;
   retry: () => void;
@@ -57,39 +65,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStatus('loading');
       setError(null);
 
-      const stored = typeof window === 'undefined' ? null : window.localStorage.getItem(TOKEN_STORAGE_KEY);
-      if (stored) {
-        try {
-          const profile = await api.me(stored);
-          if (cancelled) return;
-          setToken(stored);
-          setUser(profile);
-          setStatus('ready');
-          return;
-        } catch (caught: unknown) {
-          if (caught instanceof ApiError && caught.status !== 401) {
-            if (cancelled) return;
-            setError(caught.message);
-            setStatus('error');
-            return;
-          }
-          window.localStorage.removeItem(TOKEN_STORAGE_KEY);
-        }
+      const stored =
+        typeof window === 'undefined' ? null : window.localStorage.getItem(TOKEN_STORAGE_KEY);
+      if (!stored) {
+        if (!cancelled) setStatus('signed_out');
+        return;
       }
 
       try {
-        const session = await api.login(DEMO_ACCOUNTS[0]!.email, DEMO_PASSWORD);
+        const profile = await api.me(stored);
         if (cancelled) return;
-        window.localStorage.setItem(TOKEN_STORAGE_KEY, session.token);
-        setToken(session.token);
-        setUser(session.user);
+        setToken(stored);
+        setUser(profile);
         setStatus('ready');
       } catch (caught: unknown) {
         if (cancelled) return;
+        if (caught instanceof ApiError && caught.status === 401) {
+          window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+          setStatus('signed_out');
+          return;
+        }
         setError(
           caught instanceof ApiError
-            ? `${caught.message} Seed the database with "pnpm db:seed" and start the API.`
-            : 'Unable to start a VYBE session',
+            ? `${caught.message} Start the API (\`pnpm api\`) and try again.`
+            : 'Unable to reach the VYBE API',
         );
         setStatus('error');
       }
@@ -112,7 +111,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setStatus('ready');
     } catch (caught: unknown) {
       setError(caught instanceof ApiError ? caught.message : 'Sign in failed');
-      setStatus('error');
+      setStatus('signed_out');
+      throw caught;
+    }
+  }, []);
+
+  const signUp = useCallback(async (input: RegisterInput): Promise<void> => {
+    setStatus('loading');
+    setError(null);
+    try {
+      const session = await api.register(
+        input.email,
+        input.password,
+        input.username,
+        input.displayName,
+      );
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, session.token);
+      setToken(session.token);
+      setUser(session.user);
+      setStatus('ready');
+    } catch (caught: unknown) {
+      setError(caught instanceof ApiError ? caught.message : 'Could not create that account');
+      setStatus('signed_out');
       throw caught;
     }
   }, []);
@@ -121,8 +141,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     window.localStorage.removeItem(TOKEN_STORAGE_KEY);
     setToken(null);
     setUser(null);
-    setStatus('error');
-    setError('Signed out');
+    setError(null);
+    setStatus('signed_out');
   }, []);
 
   const retry = useCallback((): void => {
@@ -130,8 +150,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<SessionContextValue>(
-    () => ({ status, token, user, error, signIn, signOut, setUser, retry }),
-    [status, token, user, error, signIn, signOut, retry],
+    () => ({ status, token, user, error, signIn, signUp, signOut, setUser, retry }),
+    [status, token, user, error, signIn, signUp, signOut, retry],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

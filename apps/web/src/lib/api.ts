@@ -14,6 +14,7 @@ import type {
   RoomSummary,
   SendMessageDto,
   UserProfile,
+  VoiceTokenResponse,
 } from '@vybe/shared-types';
 import type { AvatarConfig, SceneProp } from '@vybe/shared-types';
 
@@ -156,6 +157,14 @@ export const api = {
 
   sendMessage(token: string, dto: SendMessageDto): Promise<DirectMessageView> {
     return request<DirectMessageView>('/messages', { method: 'POST', body: dto, token });
+  },
+
+  voiceToken(token: string, roomSlug: string): Promise<VoiceTokenResponse> {
+    return request<VoiceTokenResponse>('/voice/token', {
+      method: 'POST',
+      body: { roomSlug },
+      token,
+    });
   },
 
   generateRoomLayout(token: string, prompt: string): Promise<RoomLayoutSuggestion> {

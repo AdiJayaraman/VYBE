@@ -91,8 +91,10 @@ Demo accounts (password `vybe1234` for all):
 | `kai@vybe.space`   | `kai`    | Arcade collector   |
 | `mira@vybe.space`  | `mira`   | 3D room architect  |
 
-The web client auto-signs in as `nova` on first load, and the sidebar has an account switcher so you
-can open two browser windows as two different people and meet in a room.
+The web client opens on a real sign-in screen (email + password, or one-click demo accounts) and
+keeps the JWT in `localStorage`. The sidebar has an account switcher and a sign-out button, so you can
+open two browser windows as two different people and meet in a room. The mobile app has the same
+sign-in screen with demo shortcuts.
 
 ## 6. Launch the full stack
 
@@ -125,9 +127,13 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:4000 pnpm --filter @vybe/mobile start
 | `PORT`                | API port (default `4000`)                                       |
 | `DATABASE_URL`        | PostgreSQL connection string                                    |
 | `JWT_SECRET`          | Demo/access token secret (change in production)                 |
-| `SUPABASE_JWT_SECRET` | Optional: verify Supabase access tokens instead of demo tokens  |
-| `SUPABASE_URL`        | Optional: Supabase project URL                                  |
-| `GEMINI_API_KEY`      | Optional: enables Gemini layout generation (fallback otherwise) |
+| `SUPABASE_JWT_SECRET` | Optional: legacy HS256 secret for Supabase-signed tokens       |
+| `SUPABASE_URL`        | Supabase project URL (used to derive the JWKS endpoint)         |
+| `SUPABASE_JWKS_URL`   | Optional: explicit JWKS URL for ES256/RS256 Supabase tokens     |
+| `GEMINI_API_KEY`      | Enables Gemini room layouts (deterministic fallback without it) |
+| `LIVEKIT_URL`         | LiveKit Cloud websocket URL (`wss://…`) for proximity voice     |
+| `LIVEKIT_API_KEY`     | LiveKit API key (server only — never sent to the browser)       |
+| `LIVEKIT_API_SECRET`  | LiveKit API secret (server only)                                |
 | `VYBE_PG_POOL_MAX`    | Optional: max PostgreSQL pool connections (default 10)          |
 | `CORS_ORIGINS`        | Comma-separated allowlist for REST + Socket.IO. Required in production; dev reflects request origin |
 
@@ -167,11 +173,12 @@ Every route except `auth/login|register` requires `Authorization: Bearer <token>
 | GET    | `/rooms`                         | Public rooms + live occupancy                |
 | GET    | `/rooms/:slug`                   | Metadata, template, `sceneGraph`, occupants  |
 | POST   | `/rooms`                         | Create a custom room                         |
-| PATCH  | `/rooms/:slug/scene`             | Persist a new `sceneGraph`                   |
+| PATCH  | `/rooms/:slug/scene`             | Persist a new `sceneGraph` (owner only)      |
 | GET    | `/messages/conversations`        | Inbox summaries                              |
 | GET    | `/messages/:userId`              | Thread (marks incoming as read)              |
 | POST   | `/messages`                      | DM, optional `roomInviteId`                  |
-| POST   | `/ai/generate-room-layout`       | Prompt → `SceneProp[]` (Gemini or fallback)  |
+| POST   | `/ai/generate-room-layout`       | Prompt → `SceneProp[]` (Gemini 3.1 Flash Lite, sanitized + clamped) |
+| POST   | `/voice/token`                   | LiveKit join grant scoped to one room (15 min) |
 
 ## Real-time protocol (`/spatial` namespace)
 
@@ -185,6 +192,33 @@ Server → client: `room:state_sync`, `room:player_joined`, `room:player_left`, 
 
 All event names and payloads come from `@vybe/shared-types` (`ServerToClientEvents` /
 `ClientToServerEvents`) — no app redeclares them.
+
+## Proximity voice (LiveKit)
+
+Voice is **spatial by room, not by distance-mixed audio**: everyone in the same VYBE room shares one
+LiveKit room (`vybe-<roomId>`), so you hear the people you can see on screen.
+
+1. The room HUD's **join voice** button calls `POST /api/voice/token` with the room slug.
+2. The API mints a 15-minute LiveKit grant (`sub` = VYBE user id, room-scoped, publish + subscribe)
+   with `LIVEKIT_API_SECRET`. The secret never reaches the browser.
+3. The client connects with `livekit-client`, publishes the microphone and shows a mic mute toggle
+   plus the live participant count.
+
+Without the three `LIVEKIT_*` variables the endpoint returns **503** and the HUD reports that voice is
+not configured — the rest of the app keeps working. Microphone permissions are requested by the
+browser on first join.
+
+## Authentication
+
+- **Primary:** email + password against `POST /api/auth/register|login`; passwords are scrypt-hashed,
+  and the API signs its own HS256 access token (`JWT_SECRET`, 7 days).
+- **Supabase:** if `SUPABASE_URL`/`SUPABASE_JWKS_URL` is set, access tokens issued by Supabase are
+  verified against its JWKS (Supabase now signs with **ES256**; RS256 and legacy HS256 are also
+  accepted). The first Supabase token for an unknown `sub` provisions a matching VYBE profile, and
+existing emails are linked automatically.
+- Supabase projects ship with **email confirmation on** by default. Until you disable it (Authentication
+  → Providers → Email) or confirm the user, Supabase will not return a session token — the VYBE
+  sign-in form is unaffected because it uses the API's own credentials.
 
 ## Architecture rules that matter
 

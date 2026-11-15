@@ -11,6 +11,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { RoomsModule } from './rooms/rooms.module.js';
 import { UsersModule } from './users/users.module.js';
 import { GatewayModule } from './gateway/gateway.module.js';
+import { VoiceModule } from './voice/voice.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { GatewayModule } from './gateway/gateway.module.js';
     RoomsModule,
     MessagesModule,
     AiModule,
+    VoiceModule,
     GatewayModule,
   ],
   controllers: [HealthController],

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { MobileNav } from '@/components/MobileNav';
-import { Sidebar } from '@/components/Sidebar';
+import { AppShell } from '@/components/AppShell';
 import { SessionProvider } from '@/lib/session';
 import './globals.css';
 
@@ -15,13 +14,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body className="min-h-screen bg-vybe-background text-vybe-text-primary antialiased">
         <SessionProvider>
-          <div className="flex min-h-screen">
-            <MobileNav />
-            <Sidebar />
-            <main className="flex min-h-screen flex-1 flex-col pt-16 lg:pt-0 lg:pl-[264px]">
-              {children}
-            </main>
-          </div>
+          <AppShell>{children}</AppShell>
         </SessionProvider>
       </body>
     </html>

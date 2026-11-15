@@ -17,6 +17,7 @@ import { neonPalette } from '@vybe/ui';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useSpatialRoom } from '@/lib/useSpatialRoom';
+import { useVoiceRoom } from '@/lib/useVoiceRoom';
 
 const RoomCanvas = dynamic(() => import('@/components/room/RoomCanvas'), {
   ssr: false,
@@ -80,6 +81,8 @@ export default function SpatialRoomPage() {
     token,
     initialScene,
   });
+
+  const voice = useVoiceRoom({ roomSlug: slug || null, token });
 
   const self = useMemo(
     () => ({
@@ -192,7 +195,11 @@ export default function SpatialRoomPage() {
         onEmote={(emote) => void spatial.sendEmote(emote)}
         onSpawnProp={spawnProp}
         onGenerateLayout={generateLayout}
-        onLeave={spatial.leave}
+        voice={voice}
+        onLeave={() => {
+          voice.leave();
+          spatial.leave();
+        }}
       />
 
       {spatial.error ? (

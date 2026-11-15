@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { hashPassword, verifyPassword, type User } from '@vybe/database';
 import type {
   AuthSession,
@@ -21,6 +22,7 @@ import { ACCESS_TOKEN_TTL_SECONDS, DEV_JWT_SECRET, type AuthenticatedUser, type 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private supabaseJwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -34,6 +36,14 @@ export class AuthService {
 
   private get supabaseSecret(): string | null {
     return this.config.get<string>('SUPABASE_JWT_SECRET') ?? null;
+  }
+
+  /** Supabase moved to asymmetric signing keys (ES256); JWKS is the source of truth. */
+  private get supabaseJwksUrl(): string | null {
+    const explicit = this.config.get<string>('SUPABASE_JWKS_URL')?.trim();
+    if (explicit && explicit.startsWith('https://')) return explicit;
+    const base = this.config.get<string>('SUPABASE_URL')?.trim().replace(/\/$/, '');
+    return base ? `${base}/auth/v1/.well-known/jwks.json` : null;
   }
 
   async register(dto: RegisterDto): Promise<AuthSession> {
@@ -119,12 +129,49 @@ export class AuthService {
 
     for (const secret of secrets) {
       try {
-        return await this.jwt.verifyAsync<VybeJwtPayload>(token, { secret });
+        const payload = await this.jwt.verifyAsync<VybeJwtPayload>(token, { secret });
+        return payload;
       } catch {
         // try the next configured secret
       }
     }
-    return null;
+
+    return this.verifySupabaseToken(token);
+  }
+
+  /**
+   * Verifies a Supabase access token against the project's JWKS. Supabase now
+   * signs with ES256 P-256 keys (older projects used HS256, still covered above),
+   * so both signatures are accepted and the key set is cached for 10 minutes.
+   */
+  private async verifySupabaseToken(token: string): Promise<VybeJwtPayload | null> {
+    const url = this.supabaseJwksUrl;
+    if (!url) return null;
+
+    try {
+      this.supabaseJwks ??= createRemoteJWKSet(new URL(url), {
+        cacheMaxAge: 10 * 60_000,
+        cooldownDuration: 30_000,
+      });
+      const { payload } = await jwtVerify(token, this.supabaseJwks, {
+        algorithms: ['ES256', 'RS256'],
+      });
+      const sub = typeof payload.sub === 'string' ? payload.sub : null;
+      if (!sub) return null;
+
+      const metadata = readSupabaseMetadata(payload);
+      return {
+        sub,
+        email: typeof payload.email === 'string' ? payload.email : undefined,
+        username: metadata.username,
+        provider: 'supabase',
+        iat: payload.iat,
+        exp: payload.exp,
+      };
+    } catch (error: unknown) {
+      this.logger.debug(`Supabase token rejected: ${String(error)}`);
+      return null;
+    }
   }
 
   private async findUserByAnyId(id: string): Promise<User | null> {
@@ -215,4 +262,15 @@ export class AuthService {
       expiresAt: new Date(Date.now() + ACCESS_TOKEN_TTL_SECONDS * 1000).toISOString(),
     };
   }
+}
+
+function readSupabaseMetadata(payload: JWTPayload): { username?: string } {
+  const raw = payload['user_metadata'];
+  if (typeof raw !== 'object' || raw === null) return {};
+  const record = raw as Record<string, unknown>;
+  const username = record['username'];
+  if (typeof username === 'string' && username.trim().length > 0) return { username: username.trim() };
+  const fullName = record['full_name'];
+  if (typeof fullName === 'string' && fullName.trim().length > 0) return { username: fullName.trim() };
+  return {};
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { neonPalette } from '@vybe/ui';
 import type {
   ChatMessageEvent,
@@ -11,6 +11,7 @@ import type {
   RoomParticipant,
 } from '@vybe/shared-types';
 import { timeAgo } from '@/lib/format';
+import type { VoiceRoomApi } from '@/lib/useVoiceRoom';
 
 const EMOTES: { id: EmoteType; label: string; glyph: string }[] = [
   { id: 'wave', label: 'Wave', glyph: '👋' },
@@ -38,6 +39,7 @@ export interface SpatialHudProps {
   onEmote: (emote: EmoteType) => void;
   onSpawnProp: (modelType: ModelType) => void;
   onGenerateLayout: (prompt: string) => Promise<RoomLayoutSuggestion | null>;
+  voice: VoiceRoomApi;
   onLeave: () => void;
 }
 
@@ -52,6 +54,7 @@ export function SpatialHud({
   onEmote,
   onSpawnProp,
   onGenerateLayout,
+  voice,
   onLeave,
 }: SpatialHudProps) {
   const [chatOpen, setChatOpen] = useState(true);
@@ -60,45 +63,13 @@ export function SpatialHud({
   const [aiPrompt, setAiPrompt] = useState('Cyberpunk lo-fi chill lounge with neon sofas and an arcade corner');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const audioRef = useRef<{ context: AudioContext; oscillator: OscillatorNode; gain: GainNode } | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.oscillator.stop();
-        void audioRef.current.context.close();
-        audioRef.current = null;
-      }
-    };
-  }, []);
-
-  const toggleAudio = (): void => {
-    if (audioEnabled) {
-      if (audioRef.current) {
-        audioRef.current.oscillator.stop();
-        void audioRef.current.context.close();
-        audioRef.current = null;
-      }
-      setAudioEnabled(false);
+  const toggleVoice = (): void => {
+    if (voice.status === 'connected') {
+      voice.leave();
       return;
     }
-
-    try {
-      const context = new AudioContext();
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 96;
-      gain.gain.value = 0.012;
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      audioRef.current = { context, oscillator, gain };
-      setAudioEnabled(true);
-    } catch {
-      setAudioEnabled(false);
-    }
+    void voice.join();
   };
 
   const sendChat = async (): Promise<void> => {
@@ -147,16 +118,39 @@ export function SpatialHud({
         </span>
 
         <div className="ml-auto flex items-center gap-2">
+          {voice.status === 'connected' ? (
+            <button
+              type="button"
+              onClick={() => void voice.toggleMute()}
+              className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition ${
+                voice.muted
+                  ? 'border-vybe-border text-vybe-text-secondary hover:border-vybe-accent/40'
+                  : 'border-vybe-accent/60 bg-vybe-accent/15 text-vybe-accent'
+              }`}
+            >
+              {voice.muted ? '🔇 mic muted' : '🎙️ mic live'}
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={toggleAudio}
+            onClick={toggleVoice}
+            disabled={voice.status === 'connecting'}
+            title={voice.error ?? 'Proximity voice powered by LiveKit'}
             className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition ${
-              audioEnabled
+              voice.status === 'connected'
                 ? 'border-vybe-accent/60 bg-vybe-accent/15 text-vybe-accent'
-                : 'border-vybe-border text-vybe-text-secondary hover:border-vybe-accent/40'
+                : voice.status === 'error'
+                  ? 'border-vybe-danger/50 text-vybe-danger'
+                  : 'border-vybe-border text-vybe-text-secondary hover:border-vybe-accent/40'
             }`}
           >
-            {audioEnabled ? '🔊 ambience on' : '🔇 ambience off'}
+            {voice.status === 'connected'
+              ? `🎧 voice · ${voice.participants}`
+              : voice.status === 'connecting'
+                ? '🎧 connecting…'
+                : voice.status === 'error'
+                  ? '🎧 retry voice'
+                  : '🎧 join voice'}
           </button>
           <button
             type="button"

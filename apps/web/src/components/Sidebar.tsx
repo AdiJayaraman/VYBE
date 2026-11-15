@@ -15,7 +15,7 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, status, error, signIn, retry } = useSession();
+  const { user, status, error, signIn, signOut, retry } = useSession();
   const [switching, setSwitching] = useState(false);
 
   const handleSwitch = async (email: string): Promise<void> => {
@@ -119,6 +119,9 @@ export function Sidebar() {
               </option>
             ))}
           </select>
+          <button type="button" onClick={signOut} className="btn-ghost mt-2 w-full py-1.5 text-[11px]">
+            Sign out
+          </button>
         </div>
       </div>
     </aside>
