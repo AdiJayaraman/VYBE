@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "VYBE",
+    "slug": "vybe-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "vybe",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#070B19",
+    "splash": {
+      "backgroundColor": "#070B19",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "space.vybe.mobile"
+    },
+    "android": {
+      "package": "space.vybe.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#070B19"
+      }
+    },
+    "extra": {
+      "apiUrl": "http://localhost:4000"
+    }
+  }
+}

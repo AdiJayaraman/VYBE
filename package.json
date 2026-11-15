@@ -1,0 +1,28 @@
+{
+  "name": "vybe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VYBE — Hybrid 2D/3D virtual social network (pnpm + Turborepo monorepo)",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "build": "turbo run build --cache-dir=./.turbo/cache",
+    "typecheck": "turbo run typecheck --cache-dir=./.turbo/cache",
+    "dev": "turbo run dev --cache-dir=./.turbo/cache",
+    "clean": "turbo run clean --cache-dir=./.turbo/cache",
+    "db:generate": "pnpm --filter @vybe/database generate",
+    "db:migrate": "pnpm --filter @vybe/database migrate",
+    "db:push": "pnpm --filter @vybe/database push",
+    "db:seed": "pnpm --filter @vybe/database seed",
+    "db:studio": "pnpm --filter @vybe/database studio",
+    "api": "pnpm --filter @vybe/api dev",
+    "web": "pnpm --filter @vybe/web dev",
+    "mobile": "pnpm --filter @vybe/mobile start"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.11",
+    "typescript": "^5.9.3"
+  }
+}

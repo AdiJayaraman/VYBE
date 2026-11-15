@@ -1,0 +1,145 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Presence {
+  OFFLINE
+  ONLINE
+  IN_ROOM
+}
+
+/// A VYBE member. `avatarConfig` holds the modular 3D avatar JSON, and
+/// `currentRoomId` is the only spatial field persisted (never positions).
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  supabaseId   String?  @unique
+  email        String   @unique
+  username     String   @unique
+  displayName  String
+  bio          String   @default("")
+  /// Dev-auth credential (scrypt). Null for Supabase-managed accounts.
+  passwordHash String?
+  avatarConfig Json?
+  presence     Presence @default(OFFLINE)
+  currentRoomId String? @db.Uuid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  currentRoom  Room?     @relation("RoomOccupants", fields: [currentRoomId], references: [id], onDelete: SetNull)
+  ownedRooms   Room[]    @relation("RoomOwner")
+  posts        Post[]
+  likes        Like[]
+  comments     Comment[]
+  following    Follow[]  @relation("FollowFollower")
+  followers    Follow[]  @relation("FollowFollowing")
+  sentMessages     DirectMessage[] @relation("MessageSender")
+  receivedMessages DirectMessage[] @relation("MessageRecipient")
+
+  @@index([currentRoomId])
+}
+
+model Follow {
+  id          String   @id @default(uuid()) @db.Uuid
+  followerId  String   @db.Uuid
+  followingId String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+/// 3D room metadata. `sceneGraph` is the persisted prop layout; live avatar
+/// transforms stay in the NestJS gateway's in-memory presence store.
+model Room {
+  id              String   @id @default(uuid()) @db.Uuid
+  slug            String   @unique
+  name            String
+  description     String   @default("")
+  templateId      String   @default("cyber_lounge_v1")
+  themeTag        String   @default("CYBER LOUNGE")
+  isPublic        Boolean  @default(true)
+  maxParticipants Int      @default(20)
+  sceneGraph      Json
+  ownerId         String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  owner     User?           @relation("RoomOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  occupants User[]          @relation("RoomOccupants")
+  posts     Post[]          @relation("PostLinkedRoom")
+  invites   DirectMessage[]
+
+  @@index([isPublic])
+}
+
+model Post {
+  id           String   @id @default(uuid()) @db.Uuid
+  authorId     String   @db.Uuid
+  content      String   @default("")
+  mediaUrls    String[] @default([])
+  linkedRoomId String?  @db.Uuid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  author     User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  linkedRoom Room?     @relation("PostLinkedRoom", fields: [linkedRoomId], references: [id], onDelete: SetNull)
+  likes      Like[]
+  comments   Comment[]
+
+  @@index([createdAt])
+  @@index([authorId])
+  @@index([linkedRoomId])
+}
+
+model Like {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid
+  userId    String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId])
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @db.Uuid
+  authorId  String   @db.Uuid
+  content   String
+  createdAt DateTime @default(now())
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+}
+
+/// 1:1 direct messages, optionally carrying a 3D room invite card.
+model DirectMessage {
+  id           String    @id @default(uuid()) @db.Uuid
+  senderId     String    @db.Uuid
+  recipientId  String    @db.Uuid
+  content      String
+  roomInviteId String?   @db.Uuid
+  readAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  sender     User  @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient  User  @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  roomInvite Room? @relation(fields: [roomInviteId], references: [id], onDelete: SetNull)
+
+  @@index([senderId, recipientId, createdAt])
+  @@index([recipientId, createdAt])
+}
